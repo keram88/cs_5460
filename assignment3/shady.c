@@ -39,6 +39,9 @@ MODULE_LICENSE("GPL");
 
 #define SHADY_DEVICE_NAME "shady"
 
+unsigned long long system_call_table_address = 0xffffffff81801400;
+asmlinkage int (*old_open) (const char*, int, int);
+
 /* parameters */
 static int shady_ndevices = SHADY_NDEVICES;
 
@@ -49,6 +52,14 @@ static unsigned int shady_major = 0;
 static struct shady_dev *shady_devices = NULL;
 static struct class *shady_class = NULL;
 /* ================================================================ */
+
+
+
+asmlinkage int my_open (const char* file, int flags, int mode)
+{
+  printk("Using my_open\n");
+  return old_open(file, flags, mode);
+}
 
 int 
 shady_open(struct inode *inode, struct file *filp)
@@ -207,6 +218,13 @@ shady_cleanup_module(int devices_to_destroy)
   return;
 }
 
+static void 
+set_addr_rw (unsigned long addr) {
+  unsigned int level;
+  pte_t *pte = lookup_address(addr, &level);
+  if (pte->pte &~ _PAGE_RW) pte->pte |= _PAGE_RW;
+}
+
 static int __init
 shady_init_module(void)
 {
@@ -222,6 +240,7 @@ shady_init_module(void)
       err = -EINVAL;
       return err;
     }
+
 
   /* Get a range of minor numbers (starting with 0) to work with */
   err = alloc_chrdev_region(&dev, 0, shady_ndevices, SHADY_DEVICE_NAME);
@@ -255,7 +274,11 @@ shady_init_module(void)
       goto fail;
     }
   }
-  
+
+  set_addr_rw(system_call_table_address);
+  old_open = (asmlinkage int (*) (const char*, int, int))((unsigned long long**)system_call_table_address)[__NR_open];
+  ((unsigned long long**)system_call_table_address)[__NR_open] = (unsigned long long *)my_open;
+
   return 0; /* success */
 
  fail:
@@ -266,6 +289,7 @@ shady_init_module(void)
 static void __exit
 shady_exit_module(void)
 {
+  ((unsigned long long**)system_call_table_address)[__NR_open] = (unsigned long long *)old_open;
   shady_cleanup_module(shady_ndevices);
   return;
 }
