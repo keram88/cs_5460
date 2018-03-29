@@ -94,6 +94,7 @@ sleepy_read(struct file *filp, char __user *buf, size_t count,
   struct sleepy_dev *dev = (struct sleepy_dev *)filp->private_data;
   int minor;
   minor = (int)iminor(filp->f_path.dentry->d_inode);
+
   if (mutex_lock_killable(&dev->sleepy_mutex)) {
     return -EINTR;
   }
@@ -128,6 +129,11 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
   if (copy_from_user(&sleep_time_buf, buf, 4)) {
     printk(KERN_WARNING "[target] copy_from_user fault\n");
     return -EFAULT;
+  }
+
+  if (sleep_time_buf < 0) {
+    printk(KERN_WARNING "[target] negative sleep time supplied: %d", sleep_time_buf);
+    return -EINVAL;
   }
 
   sleep_jiffies = sleep_time_buf * HZ;
