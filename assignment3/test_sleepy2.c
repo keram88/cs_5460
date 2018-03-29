@@ -26,8 +26,10 @@ int main(void) {
 			"/dev/sleepy6","/dev/sleepy7",
 			"/dev/sleepy8","/dev/sleepy9"};
   pid_t my_pid;
+  size_t child_count = 0;
+
   for (i = 0; i < 10; ++i) {
-    for (j = 0; j < 10; ++i) {
+    for (j = 0; j < 10; ++j) {
       if (fork() == 0) {
 	/* writing to device i*/
 	fd = open(devs[j], O_RDWR);
@@ -43,13 +45,17 @@ int main(void) {
 	
 	return 0;
       }
+      else {
+	child_count++;
+	printf("%lu\n", child_count);
+      }
     }
   }
 
-  /* sleep for a second*/
+  /* sleep for a second */
   sleep(1);
-
-  /* read from device 9*/
+		
+  /* read from device 9 */
   fd = open("/dev/sleepy9", O_RDWR);
   assert(fd != -1);
   r = read(fd, NULL, 0);
@@ -58,7 +64,7 @@ int main(void) {
 
   sleep(5); /* sleep for 7 seconds*/
 
-  /* now read from device 0*/
+  /* now read from device 0 */
   for (i = 0; i < 10; ++i) {
     fd = open(devs[i], O_RDWR);
     assert(fd != -1);
@@ -67,8 +73,8 @@ int main(void) {
     close(fd);
   }
 
-  for (i = 0; i < 10*10; i++)
+  for (i = 0; i < 10*10; i++) {
     wait(NULL);
-  
+  }
   return 0;
 }
