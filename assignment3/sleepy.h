@@ -18,7 +18,7 @@
  */
 struct sleepy_dev {
   wait_queue_head_t sleepy_waitqueue;
-  char wake_up;
+  size_t wake_up;
   struct mutex sleepy_mutex; 
   struct cdev cdev;
 };

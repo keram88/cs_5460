@@ -98,18 +98,11 @@ sleepy_read(struct file *filp, char __user *buf, size_t count,
     return -EINTR;
   }
   
-  dev->wake_up = 1;
+  dev->wake_up += 1;
   printk("SLEEPY_READ DEVICE (%d): Process is waking everyone up. \n", minor);
-  wake_up_interruptible(&dev->sleepy_waitqueue);
-
+  wake_up_interruptible_all(&dev->sleepy_waitqueue);
   mutex_unlock(&dev->sleepy_mutex);
-
-  if (mutex_lock_killable(&dev->sleepy_mutex)) {
-    return -EINTR;
-  }
-  dev->wake_up = 0;
-  mutex_unlock(&dev->sleepy_mutex);
-
+  
   return count;
 }
                 
@@ -121,9 +114,9 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
   ssize_t retval;
   int sleep_time_buf = 0;
   ssize_t sleep_jiffies = 0;
-  char* wake_cond;
+  size_t* wake_cond;
   int minor;
-
+  size_t my_cond;
   wait_queue_head_t* wq;
 
   minor = (int)iminor(filp->f_path.dentry->d_inode);
@@ -142,12 +135,16 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
 
   wq = &dev->sleepy_waitqueue;
   wake_cond = &dev->wake_up;
+  if (mutex_lock_killable(&dev->sleepy_mutex)) {
+    return -EINTR;
+  }
+  my_cond = dev->wake_up+1;
+  mutex_unlock(&dev->sleepy_mutex); 
   do {
     retval = wait_event_interruptible_timeout(*wq,
-					      *wake_cond != 0,
+					      *wake_cond >= my_cond,
 					      sleep_jiffies);
   } while(retval == -ERESTARTSYS);
-
   if (mutex_lock_killable(&dev->sleepy_mutex)) {
     return -EINTR;
   }
