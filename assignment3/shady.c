@@ -168,7 +168,7 @@ shady_construct_device(struct shady_dev *dev, int minor,
   err = cdev_add(&dev->cdev, devno, 1);
   if (err)
     {
-      printk(KERN_WARNING "[target] Error %d while trying to add %s%d",
+      printk(KERN_WARNING "[target] Error %d while trying to add %s%d\n",
 	     err, SHADY_DEVICE_NAME, minor);
       return err;
     }
@@ -179,7 +179,7 @@ shady_construct_device(struct shady_dev *dev, int minor,
 
   if (IS_ERR(device)) {
     err = PTR_ERR(device);
-    printk(KERN_WARNING "[target] Error %d while trying to create %s%d",
+    printk(KERN_WARNING "[target] Error %d while trying to create %s%d\n",
 	   err, SHADY_DEVICE_NAME, minor);
     cdev_del(&dev->cdev);
     return err;

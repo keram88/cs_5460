@@ -132,7 +132,7 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
   }
 
   if (sleep_time_buf < 0) {
-    printk(KERN_WARNING "[target] negative sleep time supplied: %d", sleep_time_buf);
+    printk(KERN_WARNING "[target] negative sleep time supplied: %d\n", sleep_time_buf);
     return -EINVAL;
   }
 
@@ -215,7 +215,7 @@ sleepy_construct_device(struct sleepy_dev *dev, int minor,
 
   if (IS_ERR(device)) {
     err = PTR_ERR(device);
-    printk(KERN_WARNING "[target] Error %d while trying to create %s%d",
+    printk(KERN_WARNING "[target] Error %d while trying to create %s%d\n",
 	   err, SLEEPY_DEVICE_NAME, minor);
     cdev_del(&dev->cdev);
     return err;
