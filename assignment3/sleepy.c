@@ -119,7 +119,7 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
   int minor;
   size_t my_cond;
   wait_queue_head_t* wq;
-  unsigned long start_j, end_j;
+
   minor = (int)iminor(filp->f_path.dentry->d_inode);
   if (count != 4) {
     printk(KERN_WARNING "[target] Invalid write size\n");
@@ -143,16 +143,16 @@ sleepy_write(struct file *filp, const char __user *buf, size_t count,
   if (mutex_lock_killable(&dev->sleepy_mutex)) {
     return -EINTR;
   }
-  start_j = jiffies;
   my_cond = dev->wake_up+1;
   mutex_unlock(&dev->sleepy_mutex); 
+ 
   retval = wait_event_interruptible_timeout(*wq,
 					    *wake_cond >= my_cond,
 					    sleep_jiffies);
-  if(retval == -ERESTARTSYS) {
+  if(retval == -ERESTARTSYS) { /* We really cannot try to sleep again because the interrupt will just come back */
     return -EINTR;
   }
-  end_j = jiffies;
+
   if (mutex_lock_killable(&dev->sleepy_mutex)) {
     return -EINTR;
   }
