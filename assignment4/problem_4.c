@@ -43,6 +43,10 @@ struct spin_lock_t {
 struct spin_lock_t S = {.locked = 0};
 
 void spin_lock(struct spin_lock_t *s) {
+  /* Spin on the lock while it is 1. If the lock becomes zero and this thread
+     sees it, then it places the lock back into the locked state. As this
+     operation is atomic, only one thread can do this. All other threads will
+     witness the state change. */
   while (atomic_cmpxchg(&s->locked, 0, 1) == 1) {sched_yield();}
 }
 void spin_unlock (struct spin_lock_t *s) {
