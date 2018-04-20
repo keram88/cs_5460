@@ -1,0 +1,148 @@
+\documentclass[a4paper, 11pt]{exam}
+\usepackage{titling}
+\newcommand{\subtitle}[1]{%
+  \posttitle{%
+    \par\end{center}
+    \begin{center}\large#1\end{center}
+    }%
+}
+
+\usepackage{url}
+\usepackage{amsmath,amsthm,enumitem,amssymb}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{listings}
+\renewcommand{\labelenumii}{\roman{enumii}}
+
+\title{Homework Assignment 5}
+\subtitle{CS 6460\\
+Apr 20,2018\\
+Marek Baranowski}
+
+\begin{document}
+\maketitle
+\begin{enumerate}
+\item Chapter 5 of OSC discusses possible race conditions on various
+  kernel data structures. Most scheduling algorithms maintain a run
+  queue, which lists processes eligible to run on a processor. On
+  multicore systems, there are two general options: (1) each
+  processing core has its own run queue, or (2) a single run queue is
+  shared by all processing cores. Briefly give at least one advantage
+  and one disadvantage of each of these approaches.
+
+Run queues on each core:
+
+Pros:
+\begin{enumerate}
+\item Run queues on each core is helpful because the scheduling
+  decisions are distributed, and the core can respond to interrupts
+  better.
+\item Core affinity is baked into this design, leading to better cache
+  peformance.
+\end{enumerate}
+Cons:
+\begin{enumerate}
+\item Distributing the run queues is more difficult if the scheduler
+  wants to avoid idle or overloaded cores.
+\item The run queues have to be carefully managed to avoid losing a
+  process or accidentally running one process on two cores.
+\end{enumerate}
+
+A global run queue:
+Pros:
+\begin{enumerate}
+\item The scheduler design is simpler, making bugs less likely.
+\item It is to design the scheduler to better utilize all resources.
+\end{enumerate}
+
+Cons:
+\begin{enumerate}
+\item The scheduler design would be more complicated to keep process
+affinity.
+\item The scheduler is run in an inherently serial way, potentially
+wasting resources when making a scheduling decision.
+\item The global scheduler is always communicating with other cores.
+\end{enumerate}
+
+This article talks about several bugs in the distributed Linux CFS scheduler
+where significant waste of resources was found.
+\begin{verbatim}https://blog.acolyer.org/2016/04/26/the-linux-scheduler-a-decade-of-wasted-cores/\end{verbatim}
+
+
+\item Consider the following code example for allocating and releasing processes:
+
+\begin{lstlisting}[numbers=left]
+#define MAX_PROCESSES 255
+int number_of_processes = 0;
+
+/* the implementation of fork() calls this function */
+int allocate_process() {
+  int new_pid;
+  if (number_of_processes == MAX_PROCESSES) {
+    return -1;
+  } else {
+    /* allocate necessary process resources */
+    ++number_of_processes;
+    return new_pid;
+  }
+}
+
+/* the implementation of exit() call this function */
+void release_process() {
+  /* release process resources */
+  --number_of_processes;
+}
+\end{lstlisting}
+
+\begin{enumerate}
+\item Identify the race condition(s).
+\begin{enumerate}
+\item There are two read/write races between line 7 and lines 11 and 19.
+\item Lines 12 and 19 have read/write and write/write races.
+\item Line 13 races with itself if two threads are at this line of
+  code. Similarly for 19.
+\end{enumerate}
+\item There needs to be an acquire before lines 7 and 19. There needs to be a
+release before lines 8 and 11 and after line 19. This eliminates
+all previously mentioned data races. 
+The increment needs to be atomic with the comparison, otherwise the the number
+of processes could change and we could accidentally exceed MAX\_PROCESSES. This
+is why the lock in allocate\_process is not fine grained.
+
+\item Without rewriting the program, we cannot simply change the data
+  types to atomic. This would make the program race free, however we
+  could violate the invariant that number\_of\_processes $<$
+  MAX\_PROCESSES, as previously mentioned. The check needs to be
+  atomic with the increment.
+\end{enumerate}
+
+\item Briefly explain why the OS often uses an FCFS disk-scheduling
+  algorithm when the underlying device is an SSD.
+
+\item Describe one advantage and two disadvantages of using SSDs as a
+  caching tier compared with using only magnetic disks.
+
+\begin{itemize}
+\item An advantage is the very high bandwidth, low latency nature of
+  SSD media. This makes page swapping less costly.
+\item A disadvantage is that swapping tends to read and write
+  different data to the disk, increasing wear on the disk.
+\item Another disadvantage is if the disk is nearly full, the erase
+  block property of the SSD may lead to write amplification, and
+  ultimately lower access times than a regular magnetic disk.
+\end{itemize}
+\item Consider a file system that uses inodes to represent files. Disk
+  blocks are 8 KB in size, and a pointer to a disk block requires 4
+  bytes. This filesystem has 12 direct disk blocks, as well as one
+  single, one double, and one triple indirect disk blocks entry in its
+  inode. What is the maximum size of a file that can be stored in this
+  file system?
+
+
+
+
+\end{enumerate}
+
+
+\end{document}
