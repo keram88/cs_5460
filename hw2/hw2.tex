@@ -120,6 +120,16 @@ is why the lock in allocate\_process is not fine grained.
 \item Briefly explain why the OS often uses an FCFS disk-scheduling
   algorithm when the underlying device is an SSD.
 
+  The disk-scheduling algorithms discussed in class are mostly driven
+  by reducing the amount the head moves around the disk. These
+  algorithms tend to reorder disk accesses to reduce average latency
+  at the expense of algorithms that may cause starvation, or higher
+  maximum latencies. For SSDs scheduling commands to optimize some
+  sort of locality doesn't make sense, as there is a very small
+  penalty to accessing data rondomly. FCFS is a good algorithm for
+  SSDs since it is fair and should give the lowest latency for
+  applications.
+
 \item Describe one advantage and two disadvantages of using SSDs as a
   caching tier compared with using only magnetic disks.
 
