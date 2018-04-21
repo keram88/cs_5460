@@ -149,7 +149,13 @@ is why the lock in allocate\_process is not fine grained.
   inode. What is the maximum size of a file that can be stored in this
   file system?
 
-
+\begin{itemize}
+\item The 12 direct blocks give us $12\cdot8$KB=96KB.
+\item The single indirect block points to $\frac{8\text{KB}}{4\text{B}}=2048$ blocks. This is gives $8\cdot2048$KB=16MB of addressable space.
+\item The double indirect block points to $2048^2$ blocks, giving $8\cdot2048^2$KB=32GB of addressable space.
+\item the triple indirect block points to $8\cdot2048^3$KB=64TB of space.
+\end{itemize}
+The maximum file size for this system is 64.0312653481960296630859375TB.
 
 
 \end{enumerate}
