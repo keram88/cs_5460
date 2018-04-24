@@ -158,16 +158,18 @@ unsigned long long
 checked_strtoull(const char* name, const char* arg, const char* var) {
   char* end;
   long long result;
+  int old_errno = errno;
   errno = 0;
   result = strtoll(arg, &end, 10);
   if (errno || end == arg) {
     printf("Could not convert %s for %s: %s\n", arg, var, strerror(errno));
     print_usage(name);
   }
-  if (result < 0 || result > 99) {
+  if (result < 0 || result > (long long) MAX_ANIMALS) {
     printf("Argument %s out of range: %lld\n", var, result);
     print_usage(name);
   }
+  errno = old_errno;
   return result;
 }
 
@@ -176,8 +178,6 @@ int main(int argc, const char * argv[]) {
     print_usage(argv[0]);
   }
 
-  checked_strtoull(argv[0], argv[1], "cat_threads");
-  
   check_error(!pthread_mutex_init(&playground_m, NULL), "Could not initialize mutex");
   check_error(!pthread_cond_init(&cat_cv, NULL), "Could not initialize cond variable");
   check_error(!pthread_cond_init(&dogbird_cv, NULL), "Could not initialize cond variable");
@@ -204,7 +204,7 @@ int main(int argc, const char * argv[]) {
   }
   
   STOP = 0;
-  sleep(3);
+  sleep(10);
   STOP = 1;
 
   for (i = 0; i < n_dogs; ++i) {
