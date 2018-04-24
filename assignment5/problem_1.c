@@ -14,7 +14,10 @@
 #include <errno.h>
 #include <limits.h>
 
-#define check_error(x,msg) (errno=0, (x) ? 0 : (printf("%s: %s\n", msg, strerror(errno)), exit(255), 0))
+int old_errno;
+
+#define check_error(x,msg) (old_errno=errno, errno=0, (x) ? errno=old_errno :\
+			    (printf("%s: %s\n", msg, strerror(errno)), exit(255), 0))
 
 size_t MAX_ANIMALS=99;
 pthread_mutex_t playground_m;
@@ -42,12 +45,12 @@ play(void) {
 }
 
 void
-lock(void) {
+Lock(void) {
   check_error(!pthread_mutex_lock(&playground_m), "Could not acquire lock");
 }
 
 void
-unlock(void) {
+Unlock(void) {
   check_error(!pthread_mutex_unlock(&playground_m), "Could not release lock");
 }
 
@@ -63,23 +66,23 @@ Bcast(pthread_cond_t* cv) {
 
 void
 cat_enter(void) {
-  lock();
+  Lock();
   while(dogs > 0 || birds > 0) {
     Wait(&dogbird_cv);
   }
   ++cat_play;
   ++cats;
-  unlock();
+  Unlock();
 }
 
 void
 cat_exit(void) {
-  lock();
+  Lock();
   --cats;
   if (cats == 0) {
     Bcast(&cat_cv);
   }
-  unlock();
+  Unlock();
 }
 
 void*
@@ -94,22 +97,22 @@ cat(void* arg) {
 
 void
 dog_enter(void) {
-  lock();
+  Lock();
   while (cats > 0) {
     Wait(&cat_cv);
   }
   ++dog_play;
   ++dogs;
-  unlock();
+  Unlock();
 }
 
 void dog_exit(void) {
-  lock();
+  Lock();
   --dogs;
   if (dogs == 0 && birds == 0) {
     Bcast(&dogbird_cv);
   }
-  unlock();
+  Unlock();
 }
 
 void*
@@ -124,24 +127,24 @@ dog(void* arg) {
 
 void
 bird_enter(void) {
-  lock();
+  Lock();
   
   while(cats > 0) {
     Wait(&cat_cv);
   }
   ++bird_play;
   ++birds;
-  unlock();
+  Unlock();
 }
 
 void
 bird_exit(void) {
-  lock();
+  Lock();
   --birds;
   if (dogs == 0 && birds == 0) {
     Bcast(&dogbird_cv);
   }
-  unlock();
+  Unlock();
 }
 
 void*
@@ -158,7 +161,6 @@ unsigned long long
 checked_strtoull(const char* name, const char* arg, const char* var) {
   char* end;
   long long result;
-  int old_errno = errno;
   errno = 0;
   result = strtoll(arg, &end, 10);
   if (errno || end == arg) {
