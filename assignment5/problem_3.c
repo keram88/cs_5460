@@ -15,6 +15,7 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdint.h>
 
 #define check_error(x,msg) ((x) ? (0) :	\
 			    (printf("%s: %s\n", msg, strerror(errno)), exit(255), 0))
@@ -66,7 +67,7 @@ typedef struct {
 } param_pack;
 
 vector
-mk_vec() {
+mk_vec(void) {
   pair* entries;
   size_t cap = 1024;
   vector result;
@@ -220,6 +221,7 @@ run_cksum(FILE* file) {
   char buf[4096];
   size_t num_read;
   check_error((crc = malloc(sizeof(uint32_t))), "Could not malloc");
+  *crc = 0;
   while (1) {
     num_read = fread(buf, 1, sizeof(buf), file);
     *crc = crc32(*crc, buf, num_read);
@@ -358,12 +360,12 @@ dir_worker(void* params_v) {
 
   // Wait for consumers...
   // Ewwww!!! gross and weird!
-  while(consumed < total_files || cons_exited != num_threads) {
+  while(consumed < total_files || exited_count != num_threads) {
     Lock();
     Bcast(&vec_cv);
     consumed = files_out->len;
     exited_count = cons_exited;
-    if (consumed == total_files && cons_exited == num_threads) {
+    if (consumed == total_files && exited_count == num_threads) {
       Unlock();
       break;
     }
@@ -411,7 +413,7 @@ cksum_worker(void* params_v) {
   finished = done;
   todo = files_in->len;
   Unlock();
-  while (todo > 0 || !done) {
+  while (todo > 0 || !finished) {
     get_file(my_pair, files_in);
     if (my_pair->name == NULL) {
       Lock();
