@@ -1,3 +1,9 @@
+/* This program doesn't implement the monitor pattern correctly. *
+ * This is evidenced by the code with the comment:               *
+ * "Ewwww!!! gross and weird!"                                   *
+ * However, it appears to not get dead-locked without this       *
+ * because of spurious wake ups on the cv                        */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -10,12 +16,37 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-int old_errno;
-
-#define check_error(x,msg) (old_errno=errno, errno=0, (x) ? errno=old_errno :\
+#define check_error(x,msg) ((x) ? (0) :	\
 			    (printf("%s: %s\n", msg, strerror(errno)), exit(255), 0))
 
-const size_t MAX_THREADS=99;
+#define MAX_THREADS 99
+pthread_mutex_t vec_m;
+pthread_cond_t vec_cv;
+pthread_cond_t cons_cv;
+size_t num_threads;
+size_t cons_exited;
+volatile char done;
+
+void
+Lock(void) {
+  check_error(!pthread_mutex_lock(&vec_m), "Could not acquire lock");
+}
+
+void
+Unlock(void) {
+  check_error(!pthread_mutex_unlock(&vec_m), "Could not release lock");
+}
+
+void
+Wait(pthread_cond_t* cv) {
+  check_error(!pthread_cond_wait(cv, &vec_m), "Invalid cond var or mutex");
+}
+
+void
+Bcast(pthread_cond_t* cv) {
+  check_error(!pthread_cond_broadcast(cv), "Invalid cond var");
+}
+
 
 typedef struct {
   char* name;
@@ -27,6 +58,12 @@ typedef struct {
   size_t len;
   size_t cap;
 } vector;
+
+typedef struct {
+  const char* dir;
+  vector* files_in;
+  vector* files_out;
+} param_pack;
 
 vector
 mk_vec() {
@@ -164,7 +201,7 @@ crc32(uint32_t crc, const void * buf, size_t size)
 
 void
 print_usage(const char * name) {
-  printf("Usage:\n%s directory\n", name);
+  printf("Usage:\n%s directory threads[1-99]\n", name);
   exit(0);
 }
 
@@ -209,7 +246,6 @@ cksum_file(const char* name, pair* p) {
   char* result;
   FILE* file;
   uint32_t* cksum;
-  old_errno = errno;
   errno = 0;
   if ((file = fopen(name, "r"))) {
     cksum = run_cksum(file);
@@ -221,6 +257,7 @@ cksum_file(const char* name, pair* p) {
       check_error((result = malloc(sizeof("ACCESS DENIED"))), "Could not malloc");
       strcpy(result, "ACCESS DENIED");
     }
+    fclose(file);
     free(cksum);
   }
   else {
@@ -228,7 +265,6 @@ cksum_file(const char* name, pair* p) {
     strcpy(result, "ACCESS DENIED");
   }
   p->cksum = result;
-  errno = old_errno;
 }
 
 void
@@ -243,7 +279,6 @@ cksum_dir(const char* base, vector* files_in, vector* files_out) {
     check_error((path_name=malloc(base_len + file_len + 2)), "Could not malloc");
     sprintf(path_name, "%s/%s", base, p.name);
     cksum_file(path_name, &p);
-    free(path_name);
     vec_push(files_out, p.name, p.cksum);
   }
 }
@@ -254,7 +289,6 @@ list_dir(const char* dir, vector* files) {
   struct dirent* dents;
 
   check_error((d = opendir(dir)), "Error opening directory");
-  old_errno = errno;
   errno = 0;
   while ((dents = readdir(d)) != NULL && errno == 0) {
     vec_push(files, dents->d_name, NULL);
@@ -263,9 +297,148 @@ list_dir(const char* dir, vector* files) {
     printf("Error while reading %s: %s\n", dir, strerror(errno));
     exit(255);
   }
-  errno = old_errno;
   
   check_error(closedir(d) == 0, "Error closing directory");
+}
+
+unsigned long long
+checked_strtoull(const char* name, const char* arg, const char* var) {
+  char* end;
+  long long result;
+  errno = 0;
+  result = strtoll(arg, &end, 10);
+  if (errno || end == arg) {
+    printf("Could not convert %s for %s: %s\n", arg, var, strerror(errno));
+    print_usage(name);
+  }
+  if (result < 1 || result > MAX_THREADS) {
+    printf("Argument %s out of range: %lld\n", var, result);
+    print_usage(name);
+  }
+  return result;
+}
+
+void
+put_file(vector* files_in, char* name) {
+  Lock();
+  vec_push(files_in, name, NULL);
+  Bcast(&vec_cv);
+  Unlock();
+}
+
+void*
+dir_worker(void* params_v) {
+  param_pack* params = (param_pack*) params_v;
+  const char* dir = params->dir;
+  vector* files_in = params->files_in;
+  vector* files_out = params->files_out;
+  DIR* d;
+  struct dirent* dents;
+  size_t total_files = 0;
+  size_t consumed = 0;
+  size_t exited_count = 0;
+  check_error((d = opendir(dir)), "Error opening directory");
+  errno = 0;
+  while ((dents = readdir(d)) != NULL && errno == 0) {
+    put_file(files_in, dents->d_name);
+    total_files += 1;
+  }
+  if (errno != 0) {
+    printf("Error while reading %s: %s\n", dir, strerror(errno));
+    exit(255);
+  }
+
+  Lock();
+  done = 1;
+  consumed = files_out->len;
+  exited_count = cons_exited;
+  Unlock();
+
+  check_error(closedir(d) == 0, "Error closing directory");
+
+  // Wait for consumers...
+  // Ewwww!!! gross and weird!
+  while(consumed < total_files || cons_exited != num_threads) {
+    Lock();
+    Bcast(&vec_cv);
+    consumed = files_out->len;
+    exited_count = cons_exited;
+    if (consumed == total_files && cons_exited == num_threads) {
+      Unlock();
+      break;
+    }
+    Wait(&cons_cv);
+    consumed = files_out->len;
+    exited_count = cons_exited;
+    Unlock();
+  }
+
+  return NULL;
+}
+
+void
+get_file(pair* my_pair, vector* files_in) {
+  Lock();
+  while (files_in->len == 0 && !done) {
+    Wait(&vec_cv);
+  }
+  *my_pair = vec_pop(files_in);
+  Unlock();
+}
+
+void
+put_cksum(pair* my_pair, vector* files_out) {
+  Lock();
+  vec_push(files_out, my_pair->name, my_pair->cksum);
+  Bcast(&cons_cv);
+  Unlock();
+}
+
+void*
+cksum_worker(void* params_v) {
+  param_pack* params = (param_pack*) params_v;
+  const char* base = params->dir;
+  char* path_name;
+  vector* files_in = params->files_in;
+  vector* files_out = params->files_out;
+  size_t base_len = strlen(base);
+  size_t file_len;
+  pair* my_pair;
+  int finished;
+  int todo;
+  check_error((my_pair = malloc(sizeof(pair))), "Could not malloc");
+  Lock();
+  finished = done;
+  todo = files_in->len;
+  Unlock();
+  while (todo > 0 || !done) {
+    get_file(my_pair, files_in);
+    if (my_pair->name == NULL) {
+      Lock();
+      finished = done;
+      todo = files_in->len;
+      Unlock();
+      continue;
+    }
+    // Do work
+    file_len = strlen(my_pair->name);
+    check_error((path_name=malloc(base_len + file_len + 2)), "Could not malloc");
+    sprintf(path_name, "%s/%s", base, my_pair->name);
+    cksum_file(path_name, my_pair);
+    free(path_name);
+    // Put back cksum
+    put_cksum(my_pair, files_out);
+    Lock();
+    finished = done;
+    todo = files_in->len;
+    Unlock();
+  }
+  Lock();
+  cons_exited++;
+  Bcast(&cons_cv);
+  Unlock();
+  free(my_pair);
+  return NULL;
 }
 
 int
@@ -273,13 +446,31 @@ main(int argc, const char * argv[]) {
   vector files_in = mk_vec();
   vector files_out = mk_vec();
   size_t i;
-  if (argc != 2) {
+  pthread_t cksum_th[MAX_THREADS];
+  pthread_t list_th;
+  if (argc != 3) {
     print_usage(argv[0]);
   }
   
-  list_dir(argv[1], &files_in);
+  check_error(!pthread_mutex_init(&vec_m, NULL), "Could not initialize mutex");
+  check_error(!pthread_cond_init(&vec_cv, NULL), "Could not initialize cond variable");
+  check_error(!pthread_cond_init(&cons_cv, NULL), "Could not initialize cond variable");
+  done = 0;
+  
+  num_threads = checked_strtoull(argv[0], argv[2], "threads");
 
-  cksum_dir(argv[1], &files_in, &files_out);
+  param_pack params = {argv[1], &files_in, &files_out};
+  
+  check_error(!pthread_create(&list_th, NULL, dir_worker, (void*)&params), "Could not create thread");
+  for (i = 0; i < num_threads; ++i) {
+    check_error(!pthread_create(&cksum_th[i], NULL, cksum_worker, (void*)&params), "Could not create thread");
+  }
+
+  check_error(!pthread_join(list_th, NULL), "Could not join thread");
+
+  for (i = 0; i < num_threads; ++i) {
+    check_error(!pthread_join(cksum_th[i], NULL), "Could not join thread");
+  }
 
   qsort(files_out.entries, files_out.len, sizeof(pair), paircmp);
   for (i = 0; i < files_out.len; ++i) {
@@ -289,6 +480,11 @@ main(int argc, const char * argv[]) {
   }
   vec_destroy(&files_in);
   vec_destroy(&files_out);
+  
+  check_error(!pthread_cond_destroy(&cons_cv), "Could not destroy cond variable");
+  check_error(!pthread_cond_destroy(&vec_cv), "Could not destroy cond variable");
+  check_error(!pthread_mutex_destroy(&vec_m), "Could not destroy mutex");
+
   return 0;
 }
 

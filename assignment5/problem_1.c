@@ -19,7 +19,7 @@ int old_errno;
 #define check_error(x,msg) (old_errno=errno, errno=0, (x) ? errno=old_errno :\
 			    (printf("%s: %s\n", msg, strerror(errno)), exit(255), 0))
 
-size_t MAX_ANIMALS=99;
+#define MAX_ANIMALS 99
 pthread_mutex_t playground_m;
 pthread_cond_t cat_cv, dogbird_cv;
 unsigned int n_cats, n_dogs, n_birds, cats, dogs, birds;
@@ -167,7 +167,7 @@ checked_strtoull(const char* name, const char* arg, const char* var) {
     printf("Could not convert %s for %s: %s\n", arg, var, strerror(errno));
     print_usage(name);
   }
-  if (result < 0 || result > (long long) MAX_ANIMALS) {
+  if (result < 0 || result > MAX_ANIMALS) {
     printf("Argument %s out of range: %lld\n", var, result);
     print_usage(name);
   }
