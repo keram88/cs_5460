@@ -9,6 +9,7 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <stdint.h>
 
 int old_errno;
 
@@ -29,7 +30,7 @@ typedef struct {
 } vector;
 
 vector
-mk_vec() {
+mk_vec(void) {
   pair* entries;
   size_t cap = 1024;
   vector result;
@@ -183,6 +184,7 @@ run_cksum(FILE* file) {
   char buf[4096];
   size_t num_read;
   check_error((crc = malloc(sizeof(uint32_t))), "Could not malloc");
+  *crc = 0;
   while (1) {
     num_read = fread(buf, 1, sizeof(buf), file);
     *crc = crc32(*crc, buf, num_read);
